@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Plant Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; }
+        label { display: inline-block; width: 200px; font-weight: bold; }
+        input { padding: 5px; width: 150px; margin-bottom: 10px; }
+        table { border-collapse: collapse; width: 100%; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 4px; text-align: right; }
+        .highlighted { background-color: #90EE90; }
+        .results { font-weight: bold; margin: 15px 0; }
+        .table-container { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+        .monthly-summary { margin: 20px 0; }
+        .monthly-summary table { width: auto; margin: 10px 0; }
+        .monthly-summary td { padding: 5px 15px; }
+        .monthly-summary h3 { margin: 0 0 10px 0; }
+        #loading { display: none; color: #666; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Variables</h2>
+        <div class="section">
+            <div>
+                <label>Number of Engines:</label>
+                <input type="number" id="engineCount" value="1" min="1">
+            </div>
+            <div>
+                <label>Gas Engine (kWe):</label>
+                <input type="number" id="gasEngine" value="315">
+            </div>
+            <div>
+                <label>NG consumption (m³):</label>
+                <input type="number" id="ngConsumption" value="84">
+            </div>
+            <div>
+                <label>Load (%):</label>
+                <input type="number" id="loadPercentage" value="0.9" step="0.1" max="1">
+            </div>
+            <div>
+                <label>Gas price (per m³):</label>
+                <input type="number" id="gasPrice" value="16.5">
+            </div>
+        </div>
+
+        <h2>Results</h2>
+        <div class="section">
+            <div>
+                <label>Generation kWe:</label>
+                <span id="kweResult">0</span>
+            </div>
+            <div>
+                <label>Consumption (m³):</label>
+                <span id="consumptionResult">0</span>
+            </div>
+            <div>
+                <label>1 kWe price:</label>
+                <span id="kWePriceResult">0</span>
+            </div>
+            <div>
+                <label>1 MWe price:</label>
+                <span id="mWePriceResult">0</span>
+            </div>
+        </div>
+
+        <h2>Monthly Spending</h2>
+        <div class="section">
+            <div>
+                <label>Oil:</label>
+                <input type="number" id="oilCost" value="32800">
+            </div>
+            <div>
+                <label>Service and parts:</label>
+                <input type="number" id="serviceCost" value="41000">
+            </div>
+            <div>
+                <label>Workers (3):</label>
+                <input type="number" id="workersCost" value="49200">
+            </div>
+            <div>
+                <label>Salary taxes (22%):</label>
+                <input type="number" id="taxCost" value="10824">
+            </div>
+            <div>
+                <label>Other expenses:</label>
+                <input type="number" id="otherCost" value="61500">
+            </div>
+            <div class="results">
+                <label>Total Monthly Spending:</label>
+                <span id="totalSpending">0</span>
+            </div>
+        </div>
+
+        <h2>Price Analysis</h2>
+        <div class="section">
+            <div>
+                <label>Minimum Price:</label>
+                <input type="number" id="minPrice" value="5000" onchange="updateAnalysis()">
+            </div>
+
+            <div class="results">
+                <div>Hours above minimum price: <span id="hourCount">0</span></div>
+                <div>Total Income: <span id="totalIncome">0</span></div>
+                <div>Annual Revenue (after expenses): <span id="totalRevenue">0</span></div>
+            </div>
+
+            <div id="loading">Loading price data...</div>
+            <div class="table-container">
+                <div id="priceTable">
+                    <!-- Table will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let priceData = [];
+
+        async function loadPriceData() {
+            document.getElementById('loading').style.display = 'block';
+            try {
+                const response = await fetch('d24.csv');
+                const text = await response.text();
+                priceData = Papa.parse(text, {
+                    header: false,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                }).data;
+                updateAnalysis();
+                document.getElementById('loading').style.display = 'none';
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                document.getElementById('loading').textContent = 'Error loading price data';
+            }
+        }
+
+        function calculateResults() {
+            const engineCount = parseFloat(document.getElementById('engineCount').value);
+            const gasEngine = parseFloat(document.getElementById('gasEngine').value);
+            const ngConsumption = parseFloat(document.getElementById('ngConsumption').value);
+            const loadPercentage = parseFloat(document.getElementById('loadPercentage').value);
+            const gasPrice = parseFloat(document.getElementById('gasPrice').value);
+
+            const kwe = gasEngine * loadPercentage * engineCount;
+            const consumption = ngConsumption * loadPercentage * engineCount;
+            const kwePrice = (ngConsumption * gasPrice) / gasEngine;
+            const mwePrice = kwePrice * 1000;
+
+            document.getElementById('kweResult').textContent = kwe.toFixed(2);
+            document.getElementById('consumptionResult').textContent = consumption.toFixed(2);
+            document.getElementById('kWePriceResult').textContent = kwePrice.toFixed(2);
+            document.getElementById('mWePriceResult').textContent = mwePrice.toFixed(2);
+
+            calculateSpending();
+            updateAnalysis();
+        }
+
+        function calculateSpending() {
+            const engineCount = parseFloat(document.getElementById('engineCount').value);
+            const costs = [
+                'oilCost', 'serviceCost', 'workersCost', 
+                'taxCost', 'otherCost'
+            ].map(id => (parseFloat(document.getElementById(id).value) || 0) * engineCount);
+
+            const total = costs.reduce((sum, cost) => sum + cost, 0);
+            document.getElementById('totalSpending').textContent = total.toFixed(2);
+            updateAnalysis();
+        }
+
+        function updateAnalysis() {
+            if (!priceData.length) return;
+
+            const minPrice = parseFloat(document.getElementById('minPrice').value);
+            const mwePrice = parseFloat(document.getElementById('mWePriceResult').textContent);
+            const kweValue = parseFloat(document.getElementById('kweResult').textContent);
+            const monthlySpending = parseFloat(document.getElementById('totalSpending').textContent);
+            const annualSpending = monthlySpending * 12;
+            
+            let hoursCount = 0;
+            let totalIncome = 0;
+            let totalRevenue = 0;
+
+            const table = document.createElement('table');
+            const headerRow = document.createElement('tr');
+            headerRow.innerHTML = '<th>Day</th>' + Array.from({length: 24}, (_, i) => 
+                `<th>${i+1}</th>`).join('');
+            table.appendChild(headerRow);
+
+            priceData.forEach((dayPrices, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${index + 1}</td>`;
+                
+                dayPrices.forEach(price => {
+                    const isHighlighted = price > minPrice;
+                    row.innerHTML += `<td class="${isHighlighted ? 'highlighted' : ''}">${price}</td>`;
+                    
+                    if (isHighlighted) {
+                        hoursCount++;
+                        // Income = (price - MWe price) * kweValue / 1000
+                        const hourIncome = ((price - mwePrice)/1000) * kweValue;
+                        totalIncome += hourIncome;
+                    }
+                });
+                
+                table.appendChild(row);
+            });
+
+            document.getElementById('priceTable').innerHTML = '';
+            document.getElementById('priceTable').appendChild(table);
+            
+            totalRevenue -= annualSpending;
+            
+            document.getElementById('hourCount').textContent = hoursCount;
+            document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
+            document.getElementById('totalRevenue').textContent = totalRevenue.toFixed(2);
+
+            // Create monthly summary table
+            const monthlyTable = document.createElement('table');
+            monthlyTable.innerHTML = '<tr><th>Month</th><th>Income</th><th>Revenue</th></tr>';
+            
+            const monthlyIncome = Array(12).fill(0);
+            const monthlyRevenue = Array(12).fill(0);
+            const daysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            let dayCounter = 0;
+
+            const monthlyExpenses = monthlySpending;
+
+            daysPerMonth.forEach((days, monthIndex) => {
+                for(let day = 0; day < days; day++) {
+                    const dayData = priceData[dayCounter];
+                    if (dayData) {
+                        dayData.forEach(price => {
+                            if (price > minPrice) {
+                                // Income = (price - MWe price) * kweValue / 1000
+                                const hourIncome = ((price - mwePrice)/1000) * kweValue;
+                                monthlyIncome[monthIndex] += hourIncome;
+                            }
+                        });
+                    }
+                    dayCounter++;
+                }
+                // Revenue = Income - Monthly Expenses
+                monthlyRevenue[monthIndex] = monthlyIncome[monthIndex] - monthlyExpenses;
+            });
+
+            monthlyIncome.forEach((income, index) => {
+                const monthName = new Date(2024, index).toLocaleString('default', { month: 'long' });
+                const revenue = monthlyRevenue[index];
+                monthlyTable.innerHTML += `
+                    <tr>
+                        <td>${monthName}</td>
+                        <td>${income.toFixed(2)}</td>
+                        <td style="color: ${revenue >= 0 ? 'green' : 'red'}">${revenue.toFixed(2)}</td>
+                    </tr>`;
+            });
+
+            // Annual revenue = Total Income - (Monthly Spending * 12)
+            totalRevenue = totalIncome - (monthlySpending * 12);
+
+            const monthlyDiv = document.createElement('div');
+            monthlyDiv.className = 'monthly-summary';
+            monthlyDiv.innerHTML = '<h3>Monthly Income Summary</h3>';
+            monthlyDiv.appendChild(monthlyTable);
+
+            const existingMonthly = document.querySelector('.monthly-summary');
+            if (existingMonthly) {
+                existingMonthly.replaceWith(monthlyDiv);
+            } else {
+                document.getElementById('priceTable').parentNode.insertBefore(monthlyDiv, document.getElementById('priceTable'));
+            }
+        }
+
+        // Add event listeners
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('change', calculateResults);
+        });
+
+        // Initial load
+        loadPriceData();
+        calculateResults();
+    </script>
+</body>
+</html>
