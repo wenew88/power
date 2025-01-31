@@ -1,321 +1,9 @@
-    <script>
-        let priceData = [];
-
-        const engineSpecs = {
-            wartsila: {
-                power: 3000,
-                name: "Wärtsilä W16V25SG",
-                ngConsumption: 777,
-                price: 6000000
-            },
-            dha: {
-                power: 315,
-                name: "DHA",
-                ngConsumption: 84,
-                price: 2000000
-            },
-            jenbacher: {
-                power: 2200,
-                name: "Jenbacher 612",
-                ngConsumption: 444.30,
-                price: 5000000
-            }
-        };
-
-        function calculateNPV(cashFlows, initialInvestment, discountRate = 0.10) {
-            let npv = -initialInvestment;
-            cashFlows.forEach((cashFlow, index) => {
-                npv += cashFlow / Math.pow(1 + discountRate, index + 1);
-            });
-            return npv;
-        }
-
-        function calculateIRR(cashFlows, initialInvestment, precision = 0.01) {
-            let low = -1;
-            let high = 1;
-            let guess = (low + high) / 2;
-            let npv = 0;
-            let maxIterations = 100;
-            
-            while (maxIterations > 0) {
-                npv = -initialInvestment;
-                for (let i = 0; i < cashFlows.length; i++) {
-                    npv += cashFlows[i] / Math.pow(1 + guess, i + 1);
-                }
-                
-                if (Math.abs(npv) < precision) {
-                    return guess * 100;
-                }
-                
-                if (npv > 0) {
-                    low = guess;
-                } else {
-                    high = guess;
-                }
-                
-                guess = (low + high) / 2;
-                maxIterations--;
-            }
-            
-            return guess * 100;
-        }
-
-        function calculateROI(totalReturn, initialInvestment) {
-            return ((totalReturn - initialInvestment) / initialInvestment) * 100;
-        }
-
-        function updateEngineValues() {
-            const selectedEngine = document.getElementById('engineType').value;
-            document.getElementById('gasEngine').value = engineSpecs[selectedEngine].power;
-            document.getElementById('ngConsumption').value = engineSpecs[selectedEngine].ngConsumption;
-            document.getElementById('enginePrice').value = engineSpecs[selectedEngine].price;
-            calculateResults();
-        }
-
-        async function loadPriceData() {
-            document.getElementById('loading').style.display = 'block';
-            try {
-                const response = await fetch('d24.csv');
-                const text = await response.text();
-                priceData = Papa.parse(text, {
-                    header: false,
-                    dynamicTyping: true,
-                    skipEmptyLines: true
-                }).data;
-                updateAnalysis();
-                document.getElementById('loading').style.display = 'none';
-            } catch (error) {
-                console.error('Помилка завантаження даних:', error);
-                document.getElementById('loading').textContent = 'Помилка завантаження даних';
-            }
-        }
-
-        function calculateResults() {
-            const engineCount = parseFloat(document.getElementById('engineCount').value);
-            const gasEngine = parseFloat(document.getElementById('gasEngine').value);
-            const ngConsumption = parseFloat(document.getElementById('ngConsumption').value);
-            const enginePrice = parseFloat(document.getElementById('enginePrice').value);
-            const loadPercentage = parseFloat(document.getElementById('loadPercentage').value);
-            const gasPrice = parseFloat(document.getElementById('gasPrice').value);
-
-            const kwe = gasEngine * loadPercentage * engineCount;
-            const consumption = ngConsumption * loadPercentage * engineCount;
-            const investment = enginePrice * engineCount * 1.2;
-            const kwePrice = (ngConsumption * gasPrice) / gasEngine;
-            const mwePrice = kwePrice * 1000;
-
-            document.getElementById('kweResult').textContent = kwe.toFixed(2);
-            document.getElementById('consumptionResult').textContent = consumption.toFixed(2);
-            document.getElementById('investmentResult').textContent = investment.toFixed(2);
-            document.getElementById('kWePriceResult').textContent = kwePrice.toFixed(2);
-            document.getElementById('mWePriceResult').textContent = mwePrice.toFixed(2);
-
-            calculateSpending();
-            updateAnalysis();
-        }
-
-        function calculateSpending() {
-            const engineCount = parseFloat(document.getElementById('engineCount').value);
-            const costs = [
-                'oilCost', 'serviceCost', 'workersCost', 
-                'taxCost', 'otherCost'
-            ].map(id => (parseFloat(document.getElementById(id).value) || 0) * engineCount);
-
-            const total = costs.reduce((sum, cost) => sum + cost, 0);
-            document.getElementById('totalSpending').textContent = total.toFixed(2);
-            updateAnalysis();
-        }
-
-        function updateAnalysis() {
-            if (!priceData.length) return;
-
-            const minPrice = parseFloat(document.getElementById('minPrice').value);
-            const mwePrice = parseFloat(document.getElementById('mWePriceResult').textContent);
-            const kweValue = parseFloat(document.getElementById('kweResult').textContent);
-            const monthlySpending = parseFloat(document.getElementById('totalSpending').textContent);
-            const totalInvestment = parseFloat(document.getElementById('investmentResult').textContent);
-            
-            let hoursCount = 0;
-            let totalIncome = 0;
-            let cumulativeRevenue = 0;
-
-            const monthlyTable = document.createElement('table');
-            monthlyTable.innerHTML = '<tr><th>Місяць</th><th>кВт продано</th><th>Витрати на газ</th><th>ПДВ газ</th><th>ПДВ електроенергія</th><th>Чистий ПДВ</th><th>Дохід</th><th>Виручка</th><th>Точка беззбитковості</th></tr>';
-            
-            const monthlyIncome = Array(12).fill(0);
-            const monthlyRevenue = Array(12).fill(0);
-            const monthlyBreakeven = Array(12).fill(0);
-            const hoursAboveMinPricePerMonth = Array(12).fill(0);
-            const monthlyGasCost = Array(12).fill(0);
-            const monthlyGasVAT = Array(12).fill(0);
-            const monthlyElectricityVAT = Array(12).fill(0);
-            const monthlyNetVAT = Array(12).fill(0);
-            
-            const gasPrice = parseFloat(document.getElementById('gasPrice').value);
-            const consumption = parseFloat(document.getElementById('consumptionResult').textContent);
-            const daysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-            let dayCounter = 0;
-
-            const priceTable = document.createElement('table');
-            const headerRow = document.createElement('tr');
-            headerRow.innerHTML = '<th>День</th>' + Array.from({length: 24}, (_, i) => `<th>${i+1}</th>`).join('');
-            priceTable.appendChild(headerRow);
-
-            daysPerMonth.forEach((days, monthIndex) => {
-                for(let day = 0; day < days; day++) {
-                    if (dayCounter >= priceData.length) break;
-                    
-                    const dayPrices = priceData[dayCounter];
-                    const row = document.createElement('tr');
-                    row.innerHTML = `<td>${dayCounter + 1}</td>`;
-                    
-                    dayPrices.forEach((price, hour) => {
-                        const isHighlighted = price > minPrice;
-                        row.innerHTML += `<td class="${isHighlighted ? 'highlighted' : ''}">${price}</td>`;
-                        
-                        if (isHighlighted) {
-                            hoursCount++;
-                            hoursAboveMinPricePerMonth[monthIndex]++;
-                            const hourIncome = ((price - mwePrice)/1000) * kweValue;
-                            const hourGasCost = consumption * gasPrice;
-                            const hourGasVAT = hourGasCost * 0.2;
-                            const hourElectricityVAT = hourIncome * 0.2;
-                            const hourNetVAT = hourGasVAT - hourElectricityVAT;
-                            
-                            totalIncome += hourIncome;
-                            monthlyIncome[monthIndex] += hourIncome;
-                            monthlyGasCost[monthIndex] += hourGasCost;
-                            monthlyGasVAT[monthIndex] += hourGasVAT;
-                            monthlyElectricityVAT[monthIndex] += hourElectricityVAT;
-                            monthlyNetVAT[monthIndex] += hourNetVAT;
-                        }
-                    });
-                    
-                    priceTable.appendChild(row);
-                    dayCounter++;
-                }
-                monthlyRevenue[monthIndex] = monthlyIncome[monthIndex] - monthlySpending;
-                cumulativeRevenue += monthlyRevenue[monthIndex];
-                monthlyBreakeven[monthIndex] = totalInvestment - cumulativeRevenue;
-            });
-
-            const monthNames = [
-                'Січень', 'Лютий', 'Березень', 'Квітень', 
-                'Травень', 'Червень', 'Липень', 'Серпень',
-                'Вересень', 'Жовтень', 'Листопад', 'Грудень'
-            ];
-
-            monthlyIncome.forEach((income, index) => {
-                const monthName = monthNames[index];
-                const revenue = monthlyRevenue[index];
-                const breakeven = monthlyBreakeven[index];
-                const monthWorkingHours = hoursAboveMinPricePerMonth[index] || 0;
-                const kWeSold = kweValue * monthWorkingHours;
-                const gasCost = monthlyGasCost[index];
-                const gasVAT = monthlyGasVAT[index];
-                const electricityVAT = monthlyElectricityVAT[index];
-                const netVAT = monthlyNetVAT[index];
-                monthlyTable.innerHTML += `
-                    <tr>
-                        <td>${monthName}</td>
-                        <td>${kWeSold.toFixed(2)}</td>
-                        <td>${gasCost.toFixed(2)}</td>
-                        <td style="color: green">+${gasVAT.toFixed(2)}</td>
-                        <td style="color: red">-${electricityVAT.toFixed(2)}</td>
-                        <td style="color: ${netVAT >= 0 ? 'green' : 'red'}">${netVAT >= 0 ? '+' : '-'}${Math.abs(netVAT).toFixed(2)}</td>
-                        <td>${income.toFixed(2)}</td>
-                        <td style="color: ${revenue >= 0 ? 'green' : 'red'}">${revenue.toFixed(2)}</td>
-                        <td style="color: ${breakeven <= 0 ? 'green' : 'red'}">${breakeven <= 0 ? '+' : '-'}${Math.abs(breakeven).toFixed(2)}</td>
-                    </tr>`;
-            });
-
-            const annualRevenue = monthlyRevenue.reduce((sum, revenue) => sum + revenue, 0);
-            const totalVAT = monthlyNetVAT.reduce((sum, vat) => sum + vat, 0);
-            const freeCashFlow = monthlyBreakeven[11];
-
-            let pricesAboveMin = [];
-            priceData.forEach(dayPrices => {
-                dayPrices.forEach(price => {
-                    if (price > minPrice) {
-                        pricesAboveMin.push(price);
-                    }
-                });
-            });
-            const lcoe = pricesAboveMin.length > 0 ? 
-                (pricesAboveMin.reduce((sum, price) => sum + price, 0) / pricesAboveMin.length).toFixed(2) : 
-                "0.00";
-
-            let paybackPeriod = 0;
-            let cumulativeCashFlow = -totalInvestment;
-            
-            for (let i = 0; i < monthlyRevenue.length; i++) {
-                cumulativeCashFlow += monthlyRevenue[i];
-                if (cumulativeCashFlow >= 0) {
-                    paybackPeriod = i + 1;
-                    break;
-                }
-            }
-            
-            if (cumulativeCashFlow < 0) {
-                paybackPeriod = ">12";
-            }
-
-            // Calculate ROE, ROA, ROI, IRR, and NPV
-            const totalEquity = totalInvestment;
-            const totalAssets = totalInvestment * 1.2;
-            const roe = annualRevenue > 0 ? (annualRevenue / totalEquity) * 100 : 0;
-            const roa = annualRevenue > 0 ? (annualRevenue / totalAssets) * 100 : 0;
-            const roi = calculateROI(annualRevenue, totalInvestment);
-            const irr = calculateIRR(monthlyRevenue, totalInvestment);
-            const npv = calculateNPV(monthlyRevenue, totalInvestment);
-
-            // Update display
-            document.querySelector('.monthly-summary').innerHTML = '<h3>Щомісячний підсумок доходів</h3>';
-            document.querySelector('.monthly-summary').appendChild(monthlyTable);
-            
-            document.getElementById('priceTable').innerHTML = '';
-            document.getElementById('priceTable').appendChild(priceTable);
-            
-            document.getElementById('hourCount').textContent = hoursCount;
-            document.getElementById('lcoe').textContent = lcoe;
-            document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
-            
-            // Annual Revenue styling
-            const totalRevenueElement = document.getElementById('totalRevenue');
-            totalRevenueElement.style.color = annualRevenue > 0 ? 'green' : annualRevenue < 0 ? 'red' : 'black';
-            totalRevenueElement.textContent = annualRevenue.toFixed(2);
-            
-            // Total VAT styling
-            const totalVATElement = document.getElementById('totalVAT');
-            totalVATElement.style.color = totalVAT > 0 ? 'green' : totalVAT < 0 ? 'red' : 'black';
-            totalVATElement.textContent = `${totalVAT >= 0 ? '+' : '-'}${Math.abs(totalVAT).toFixed(2)}`;
-            
-            // Free Cash Flow styling
-            const freeCashFlowElement =             document.getElementById('paybackPeriod').textContent = paybackPeriod === ">12" ? ">12" : paybackPeriod;
-            document.getElementById('roe').textContent = roe.toFixed(2);
-            document.getElementById('roa').textContent = roa.toFixed(2);
-            document.getElementById('roi').textContent = roi.toFixed(2);
-            document.getElementById('irr').textContent = irr.toFixed(2);
-            document.getElementById('npv').textContent = npv.toFixed(2);
-        }
-
-        // Add event listeners
-        document.querySelectorAll('input[type="number"]').forEach(input => {
-            input.addEventListener('change', calculateResults);
-        });
-
-        // Initial load
-        loadPriceData();
-        calculateResults();
-    </script>
-</body>
-</html>
-            <!DOCTYPE html>
-<html lang="uk">
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Економічний аналіз будівництва електростанції</title>
+    <title>Power Plant Economic Analysis Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         body { 
@@ -434,119 +122,119 @@
 </head>
 <body>
     <div class="container">
-        <h1 class="section-title">Економічний аналіз електростанції</h1>
+        <h1 class="section-title">Power Plant Economic Analysis Dashboard</h1>
         
-        <h2 class="section-title">Вхідні параметри</h2>
+        <h2 class="section-title">Input Parameters</h2>
         <div class="section">
             <div>
-                <label>Кількість двигунів:</label>
+                <label>Number of Engines:</label>
                 <input type="number" id="engineCount" value="1" min="1">
             </div>
             <div>
-                <label>Тип двигуна:</label>
+                <label>Engine type:</label>
                 <select id="engineType" onchange="updateEngineValues()">
-                    <option value="wartsila">Wärtsilä W16V25SG (3000 кВт)</option>
-                    <option value="dha" selected>DHA (315 кВт)</option>
-                    <option value="jenbacher">Jenbacher 612 (2200 кВт)</option>
+                    <option value="wartsila">Wärtsilä W16V25SG (3000 kWe)</option>
+                    <option value="dha" selected>DHA (315 kWe)</option>
+                    <option value="jenbacher">Jenbacher 612 (2200 kWe)</option>
                 </select>
             </div>
             <div>
-                <label>Газовий двигун (кВт):</label>
+                <label>Gas Engine (kWe):</label>
                 <input type="number" id="gasEngine" value="315">
             </div>
             <div>
-                <label>Ціна двигуна:</label>
+                <label>Engine price:</label>
                 <input type="number" id="enginePrice" value="2000000">
             </div>
             <div>
-                <label>Споживання газу (м³):</label>
+                <label>NG consumption (m³):</label>
                 <input type="number" id="ngConsumption" value="84">
             </div>
             <div>
-                <label>Навантаження (%):</label>
+                <label>Load (%):</label>
                 <input type="number" id="loadPercentage" value="0.9" step="0.1" max="1">
             </div>
             <div>
-                <label>Ціна газу (за м³):</label>
+                <label>Gas price (per m³):</label>
                 <input type="number" id="gasPrice" value="16.5">
             </div>
         </div>
 
-        <h2 class="section-title">Ключові метрики проекту</h2>
+        <h2 class="section-title">Key Project Metrics</h2>
         <div class="section">
             <div>
-                <label>Генерація (кВт):</label>
+                <label>Generation kWe:</label>
                 <span id="kweResult">0</span>
             </div>
             <div>
-                <label>Споживання (м³):</label>
+                <label>Consumption (m³):</label>
                 <span id="consumptionResult">0</span>
             </div>
             <div>
-                <label>Інвестиції+20%:</label>
+                <label>Investment+20%:</label>
                 <span id="investmentResult">0</span>
             </div>
             <div>
-                <label>Ціна 1 кВт:</label>
+                <label>1 kWe price:</label>
                 <span id="kWePriceResult">0</span>
             </div>
             <div>
-                <label>Ціна 1 МВт:</label>
+                <label>1 MWe price:</label>
                 <span id="mWePriceResult">0</span>
             </div>
         </div>
 
-        <h2 class="section-title">Щомісячні операційні витрати</h2>
+        <h2 class="section-title">Monthly Operating Costs</h2>
         <div class="section">
             <div>
-                <label>Масло:</label>
+                <label>Oil:</label>
                 <input type="number" id="oilCost" value="32800">
             </div>
             <div>
-                <label>Сервіс та запчастини:</label>
+                <label>Service and parts:</label>
                 <input type="number" id="serviceCost" value="41000">
             </div>
             <div>
-                <label>Працівники (3):</label>
+                <label>Workers (3):</label>
                 <input type="number" id="workersCost" value="49200">
             </div>
             <div>
-                <label>Податки на зарплату (22%):</label>
+                <label>Salary taxes (22%):</label>
                 <input type="number" id="taxCost" value="10824">
             </div>
             <div>
-                <label>Інші витрати:</label>
+                <label>Other expenses:</label>
                 <input type="number" id="otherCost" value="61500">
             </div>
             <div class="results">
-                <label>Загальні місячні витрати:</label>
+                <label>Total Monthly Operating Costs:</label>
                 <span id="totalSpending">0</span>
             </div>
         </div>
 
-        <h2 class="section-title">Фінансові показники</h2>
+        <h2 class="section-title">Financial Performance</h2>
         <div class="section">
             <div>
-                <label>Мінімальна ціна:</label>
+                <label>Minimum Price:</label>
                 <input type="number" id="minPrice" value="5000" onchange="updateAnalysis()">
             </div>
 
             <div class="results">
-                <div>Години вище мінімальної ціни: <span id="hourCount">0</span></div>
+                <div>Hours above minimum price: <span id="hourCount">0</span></div>
                 <div>LCOE: <span id="lcoe">0</span></div>
-                <div>Загальний дохід: <span id="totalIncome">0</span></div>
-                <div>Річний дохід (після витрат): <span id="totalRevenue" class="metric-value">0</span></div>
-                <div>Загальний ПДВ: <span id="totalVAT" class="metric-value">0</span></div>
-                <div>Вільний грошовий потік: <span id="freeCashFlow" class="metric-value">0</span></div>
-                <div>Період окупності: <span id="paybackPeriod">0</span> місяців</div>
-                <div class="financial-metric">ROE (Рентабельність власного капіталу): <span id="roe" class="metric-value">0</span>%</div>
-                <div class="financial-metric">ROA (Рентабельність активів): <span id="roa" class="metric-value">0</span>%</div>
-                <div class="financial-metric">ROI (Рентабельність інвестицій): <span id="roi" class="metric-value">0</span>%</div>
-                <div class="financial-metric">IRR (Внутрішня норма прибутку): <span id="irr" class="metric-value">0</span>%</div>
-                <div class="financial-metric">NPV (Чиста приведена вартість): <span id="npv" class="metric-value">0</span></div>
+                <div>Total Income: <span id="totalIncome">0</span></div>
+                <div>Annual Revenue (after expenses): <span id="totalRevenue" class="metric-value">0</span></div>
+                <div>Total VAT: <span id="totalVAT" class="metric-value">0</span></div>
+                <div>Free Cash Flow: <span id="freeCashFlow" class="metric-value">0</span></div>
+                <div>Payback Period: <span id="paybackPeriod">0</span> months</div>
+                <div class="financial-metric">ROE (Return on Equity): <span id="roe" class="metric-value">0</span>%</div>
+                <div class="financial-metric">ROA (Return on Assets): <span id="roa" class="metric-value">0</span>%</div>
+                <div class="financial-metric">ROI (Return on Investment): <span id="roi" class="metric-value">0</span>%</div>
+                <div class="financial-metric">IRR (Internal Rate of Return): <span id="irr" class="metric-value">0</span>%</div>
+                <div class="financial-metric">NPV (Net Present Value): <span id="npv" class="metric-value">0</span></div>
             </div>
 
-            <div id="loading">Завантаження даних...</div>
+            <div id="loading">Loading price data...</div>
             
             <div class="monthly-summary">
                 <!-- Monthly summary table will be inserted here -->
@@ -560,6 +248,313 @@
         </div>
     </div>
 
-    <script>[Previous JavaScript code remains exactly the same]</script>
+    <script>
+        let priceData = [];
+
+        const engineSpecs = {
+            wartsila: {
+                power: 3000,
+                name: "Wärtsilä W16V25SG",
+                ngConsumption: 777,
+                price: 6000000
+            },
+            dha: {
+                power: 315,
+                name: "DHA",
+                ngConsumption: 84,
+                price: 2000000
+            },
+            jenbacher: {
+                power: 2200,
+                name: "Jenbacher 612",
+                ngConsumption: 444.30,
+                price: 5000000
+            }
+        };
+
+        function calculateNPV(cashFlows, initialInvestment, discountRate = 0.10) {
+            let npv = -initialInvestment;
+            cashFlows.forEach((cashFlow, index) => {
+                npv += cashFlow / Math.pow(1 + discountRate, index + 1);
+            });
+            return npv;
+        }
+
+        function calculateIRR(cashFlows, initialInvestment, precision = 0.01) {
+            let low = -1;
+            let high = 1;
+            let guess = (low + high) / 2;
+            let npv = 0;
+            let maxIterations = 100;
+            
+            while (maxIterations > 0) {
+                npv = -initialInvestment;
+                for (let i = 0; i < cashFlows.length; i++) {
+                    npv += cashFlows[i] / Math.pow(1 + guess, i + 1);
+                }
+                
+                if (Math.abs(npv) < precision) {
+                    return guess * 100;
+                }
+                
+                if (npv > 0) {
+                    low = guess;
+                } else {
+                    high = guess;
+                }
+                
+                guess = (low + high) / 2;
+                maxIterations--;
+            }
+            
+            return guess * 100;
+        }
+
+        function calculateROI(totalReturn, initialInvestment) {
+            return ((totalReturn - initialInvestment) / initialInvestment) * 100;
+        }
+
+        function updateEngineValues() {
+            const selectedEngine = document.getElementById('engineType').value;
+            document.getElementById('gasEngine').value = engineSpecs[selectedEngine].power;
+            document.getElementById('ngConsumption').value = engineSpecs[selectedEngine].ngConsumption;
+            document.getElementById('enginePrice').value = engineSpecs[selectedEngine].price;
+            calculateResults();
+        }
+
+        async function loadPriceData() {
+            document.getElementById('loading').style.display = 'block';
+            try {
+                const response = await fetch('d24.csv');
+                const text = await response.text();
+                priceData = Papa.parse(text, {
+                    header: false,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                }).data;
+                updateAnalysis();
+                document.getElementById('loading').style.display = 'none';
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                document.getElementById('loading').textContent = 'Error loading price data';
+            }
+        }
+
+        function calculateResults() {
+            const engineCount = parseFloat(document.getElementById('engineCount').value);
+            const gasEngine = parseFloat(document.getElementById('gasEngine').value);
+            const ngConsumption = parseFloat(document.getElementById('ngConsumption').value);
+            const enginePrice = parseFloat(document.getElementById('enginePrice').value);
+            const loadPercentage = parseFloat(document.getElementById('loadPercentage').value);
+            const gasPrice = parseFloat(document.getElementById('gasPrice').value);
+
+            const kwe = gasEngine * loadPercentage * engineCount;
+            const consumption = ngConsumption * loadPercentage * engineCount;
+            const investment = enginePrice * engineCount * 1.2;
+            const kwePrice = (ngConsumption * gasPrice) / gasEngine;
+            const mwePrice = kwePrice * 1000;
+
+            document.getElementById('kweResult').textContent = kwe.toFixed(2);
+            document.getElementById('consumptionResult').textContent = consumption.toFixed(2);
+            document.getElementById('investmentResult').textContent = investment.toFixed(2);
+            document.getElementById('kWePriceResult').textContent = kwePrice.toFixed(2);
+            document.getElementById('mWePriceResult').textContent = mwePrice.toFixed(2);
+
+            calculateSpending();
+            updateAnalysis();
+        }
+
+        function calculateSpending() {
+            const engineCount = parseFloat(document.getElementById('engineCount').value);
+            const costs = [
+                'oilCost', 'serviceCost', 'workersCost', 
+                'taxCost', 'otherCost'
+            ].map(id => (parseFloat(document.getElementById(id).value) || 0) * engineCount);
+
+            const total = costs.reduce((sum, cost) => sum + cost, 0);
+            document.getElementById('totalSpending').textContent = total.toFixed(2);
+            updateAnalysis();
+        }
+
+        function updateAnalysis() {
+            if (!priceData.length) return;
+
+            const minPrice = parseFloat(document.getElementById('minPrice').value);
+            const mwePrice = parseFloat(document.getElementById('mWePriceResult').textContent);
+            const kweValue = parseFloat(document.getElementById('kweResult').textContent);
+            const monthlySpending = parseFloat(document.getElementById('totalSpending').textContent);
+            const totalInvestment = parseFloat(document.getElementById('investmentResult').textContent);
+            
+            let hoursCount = 0;
+            let totalIncome = 0;
+            let cumulativeRevenue = 0;
+
+            const monthlyTable = document.createElement('table');
+            monthlyTable.innerHTML = '<tr><th>Month</th><th>kWe sold</th><th>Gas cost</th><th>Gas VAT</th><th>Electricity VAT</th><th>Net VAT</th><th>Income</th><th>Revenue</th><th>Break-even</th></tr>';
+            
+            const monthlyIncome = Array(12).fill(0);
+            const monthlyRevenue = Array(12).fill(0);
+            const monthlyBreakeven = Array(12).fill(0);
+            const hoursAboveMinPricePerMonth = Array(12).fill(0);
+            const monthlyGasCost = Array(12).fill(0);
+            const monthlyGasVAT = Array(12).fill(0);
+            const monthlyElectricityVAT = Array(12).fill(0);
+            const monthlyNetVAT = Array(12).fill(0);
+            
+            const gasPrice = parseFloat(document.getElementById('gasPrice').value);
+            const consumption = parseFloat(document.getElementById('consumptionResult').textContent);
+            const daysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            let dayCounter = 0;
+
+            const priceTable = document.createElement('table');
+            const headerRow = document.createElement('tr');
+            headerRow.innerHTML = '<th>Day</th>' + Array.from({length: 24}, (_, i) => `<th>${i+1}</th>`).join('');
+            priceTable.appendChild(headerRow);
+
+            daysPerMonth.forEach((days, monthIndex) => {
+                for(let day = 0; day < days; day++) {
+                    if (dayCounter >= priceData.length) break;
+                    
+                    const dayPrices = priceData[dayCounter];
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${dayCounter + 1}</td>`;
+                    
+                    dayPrices.forEach((price, hour) => {
+                        const isHighlighted = price > minPrice;
+                        row.innerHTML += `<td class="${isHighlighted ? 'highlighted' : ''}">${price}</td>`;
+                        
+                        if (isHighlighted) {
+                            hoursCount++;
+                            hoursAboveMinPricePerMonth[monthIndex]++;
+                            const hourIncome = ((price - mwePrice)/1000) * kweValue;
+                            const hourGasCost = consumption * gasPrice;
+                            const hourGasVAT = hourGasCost * 0.2;
+                            const hourElectricityVAT = hourIncome * 0.2;
+                            const hourNetVAT = hourGasVAT - hourElectricityVAT;
+                            
+                            totalIncome += hourIncome;
+                            monthlyIncome[monthIndex] += hourIncome;
+                            monthlyGasCost[monthIndex] += hourGasCost;
+                            monthlyGasVAT[monthIndex] += hourGasVAT;
+                            monthlyElectricityVAT[monthIndex] += hourElectricityVAT;
+                            monthlyNetVAT[monthIndex] += hourNetVAT;
+                        }
+                    });
+                    
+                    priceTable.appendChild(row);
+                    dayCounter++;
+                }
+                monthlyRevenue[monthIndex] = monthlyIncome[monthIndex] - monthlySpending;
+                cumulativeRevenue += monthlyRevenue[monthIndex];
+                monthlyBreakeven[monthIndex] = totalInvestment - cumulativeRevenue;
+            });
+
+            monthlyIncome.forEach((income, index) => {
+                const monthName = new Date(2024, index).toLocaleString('default', { month: 'long' });
+                const revenue = monthlyRevenue[index];
+                const breakeven = monthlyBreakeven[index];
+                const monthWorkingHours = hoursAboveMinPricePerMonth[index] || 0;
+                const kWeSold = kweValue * monthWorkingHours;
+                const gasCost = monthlyGasCost[index];
+                const gasVAT = monthlyGasVAT[index];
+                const electricityVAT = monthlyElectricityVAT[index];
+                const netVAT = monthlyNetVAT[index];
+                monthlyTable.innerHTML += `
+                    <tr>
+                        <td>${monthName}</td>
+                        <td>${kWeSold.toFixed(2)}</td>
+                        <td>${gasCost.toFixed(2)}</td>
+                        <td style="color: green">+${gasVAT.toFixed(2)}</td>
+                        <td style="color: red">-${electricityVAT.toFixed(2)}</td>
+                        <td style="color: ${netVAT >= 0 ? 'green' : 'red'}">${netVAT >= 0 ? '+' : '-'}${Math.abs(netVAT).toFixed(2)}</td>
+                        <td>${income.toFixed(2)}</td>
+                        <td style="color: ${revenue >= 0 ? 'green' : 'red'}">${revenue.toFixed(2)}</td>
+                        <td style="color: ${breakeven <= 0 ? 'green' : 'red'}">${breakeven <= 0 ? '+' : '-'}${Math.abs(breakeven).toFixed(2)}</td>
+                    </tr>`;
+            });
+
+            const annualRevenue = monthlyRevenue.reduce((sum, revenue) => sum + revenue, 0);
+            const totalVAT = monthlyNetVAT.reduce((sum, vat) => sum + vat, 0);
+            const freeCashFlow = monthlyBreakeven[11];
+
+            let pricesAboveMin = [];
+            priceData.forEach(dayPrices => {
+                dayPrices.forEach(price => {
+                    if (price > minPrice) {
+                        pricesAboveMin.push(price);
+                    }
+                });
+            });
+            const lcoe = pricesAboveMin.length > 0 ? 
+                (pricesAboveMin.reduce((sum, price) => sum + price, 0) / pricesAboveMin.length).toFixed(2) : 
+                "0.00";
+
+            let paybackPeriod = 0;
+            let cumulativeCashFlow = -totalInvestment;
+            
+            for (let i = 0; i < monthlyRevenue.length; i++) {
+                cumulativeCashFlow += monthlyRevenue[i];
+                if (cumulativeCashFlow >= 0) {
+                    paybackPeriod = i + 1;
+                    break;
+                }
+            }
+            
+            if (cumulativeCashFlow < 0) {
+                paybackPeriod = ">12";
+            }
+
+            // Calculate ROE, ROA, ROI, IRR, and NPV
+            const totalEquity = totalInvestment;
+            const totalAssets = totalInvestment * 1.2;
+            const roe = annualRevenue > 0 ? (annualRevenue / totalEquity) * 100 : 0;
+            const roa = annualRevenue > 0 ? (annualRevenue / totalAssets) * 100 : 0;
+            const roi = calculateROI(annualRevenue, totalInvestment);
+            const irr = calculateIRR(monthlyRevenue, totalInvestment);
+            const npv = calculateNPV(monthlyRevenue, totalInvestment);
+
+            // Update display
+            document.querySelector('.monthly-summary').innerHTML = '<h3>Monthly Income Summary</h3>';
+            document.querySelector('.monthly-summary').appendChild(monthlyTable);
+            
+            document.getElementById('priceTable').innerHTML = '';
+            document.getElementById('priceTable').appendChild(priceTable);
+            
+            document.getElementById('hourCount').textContent = hoursCount;
+            document.getElementById('lcoe').textContent = lcoe;
+            document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
+            
+            // Annual Revenue styling
+            const totalRevenueElement = document.getElementById('totalRevenue');
+            totalRevenueElement.style.color = annualRevenue > 0 ? 'green' : annualRevenue < 0 ? 'red' : 'black';
+            totalRevenueElement.textContent = annualRevenue.toFixed(2);
+            
+            // Total VAT styling
+            const totalVATElement = document.getElementById('totalVAT');
+            totalVATElement.style.color = totalVAT > 0 ? 'green' : totalVAT < 0 ? 'red' : 'black';
+            totalVATElement.textContent = `${totalVAT >= 0 ? '+' : '-'}${Math.abs(totalVAT).toFixed(2)}`;
+            
+            // Free Cash Flow styling
+            const freeCashFlowElement = document.getElementById('freeCashFlow');
+            freeCashFlowElement.style.color = freeCashFlow < 0 ? 'red' : 'green';
+            freeCashFlowElement.textContent = freeCashFlow <= 0 ? `+${Math.abs(freeCashFlow).toFixed(2)}` : '0.00';
+            
+            document.getElementById('paybackPeriod').textContent = paybackPeriod;
+            document.getElementById('roe').textContent = roe.toFixed(2);
+            document.getElementById('roa').textContent = roa.toFixed(2);
+            document.getElementById('roi').textContent = roi.toFixed(2);
+            document.getElementById('irr').textContent = irr.toFixed(2);
+            document.getElementById('npv').textContent = npv.toFixed(2);
+        }
+
+        // Add event listeners
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('change', calculateResults);
+        });
+
+        // Initial load
+        loadPriceData();
+        calculateResults();
+    </script>
 </body>
 </html>
