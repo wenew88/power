@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Power Plant Dashboard</title>
+    <title>Power Plant Economic Analysis Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         body { font-family: Arial; margin: 20px; background: #f5f5f5; }
@@ -24,11 +24,17 @@
         #loading { display: none; color: #666; margin: 10px 0; font-style: italic; }
         .financial-metric { margin-top: 10px; }
         .metric-value { font-weight: bold; }
+        .metric-positive { color: green; }
+        .metric-negative { color: red; }
+        .section-title { color: #2c3e50; margin-bottom: 15px; }
+        .info-text { font-size: 12px; color: #666; margin-top: 5px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Variables</h2>
+        <h1 class="section-title">Power Plant Economic Analysis Dashboard</h1>
+        
+        <h2 class="section-title">Variables</h2>
         <div class="section">
             <div>
                 <label>Number of Engines:</label>
@@ -64,7 +70,7 @@
             </div>
         </div>
 
-        <h2>Results</h2>
+        <h2 class="section-title">Results</h2>
         <div class="section">
             <div>
                 <label>Generation kWe:</label>
@@ -88,7 +94,7 @@
             </div>
         </div>
 
-        <h2>Monthly Spending</h2>
+        <h2 class="section-title">Monthly Spending</h2>
         <div class="section">
             <div>
                 <label>Oil:</label>
@@ -116,7 +122,7 @@
             </div>
         </div>
 
-        <h2>Price Analysis</h2>
+        <h2 class="section-title">Financial Performance</h2>
         <div class="section">
             <div>
                 <label>Minimum Price:</label>
@@ -129,10 +135,13 @@
                 <div>Total Income: <span id="totalIncome">0</span></div>
                 <div>Annual Revenue (after expenses): <span id="totalRevenue">0</span></div>
                 <div>Total VAT: <span id="totalVAT">0</span></div>
-                <div>Re-Investment: <span id="reInvestment" style="color: green">0</span></div>
+                <div>Free Cash Flow: <span id="freeCashFlow">0</span></div>
                 <div>Payback Period: <span id="paybackPeriod">0</span> months</div>
                 <div class="financial-metric">ROE (Return on Equity): <span id="roe" class="metric-value">0</span>%</div>
                 <div class="financial-metric">ROA (Return on Assets): <span id="roa" class="metric-value">0</span>%</div>
+                <div class="financial-metric">ROI (Return on Investment): <span id="roi" class="metric-value">0</span>%</div>
+                <div class="financial-metric">IRR (Internal Rate of Return): <span id="irr" class="metric-value">0</span>%</div>
+                <div class="financial-metric">NPV (Net Present Value): <span id="npv" class="metric-value">0</span></div>
             </div>
 
             <div id="loading">Loading price data...</div>
@@ -172,6 +181,48 @@
                 price: 5000000
             }
         };
+
+        function calculateNPV(cashFlows, initialInvestment, discountRate = 0.10) {
+            let npv = -initialInvestment;
+            cashFlows.forEach((cashFlow, index) => {
+                npv += cashFlow / Math.pow(1 + discountRate, index + 1);
+            });
+            return npv;
+        }
+
+        function calculateIRR(cashFlows, initialInvestment, precision = 0.01) {
+            let low = -1;
+            let high = 1;
+            let guess = (low + high) / 2;
+            let npv = 0;
+            let maxIterations = 100;
+            
+            while (maxIterations > 0) {
+                npv = -initialInvestment;
+                for (let i = 0; i < cashFlows.length; i++) {
+                    npv += cashFlows[i] / Math.pow(1 + guess, i + 1);
+                }
+                
+                if (Math.abs(npv) < precision) {
+                    return guess * 100;
+                }
+                
+                if (npv > 0) {
+                    low = guess;
+                } else {
+                    high = guess;
+                }
+                
+                guess = (low + high) / 2;
+                maxIterations--;
+            }
+            
+            return guess * 100;
+        }
+
+        function calculateROI(totalReturn, initialInvestment) {
+            return ((totalReturn - initialInvestment) / initialInvestment) * 100;
+        }
 
         function updateEngineValues() {
             const selectedEngine = document.getElementById('engineType').value;
@@ -334,7 +385,7 @@
 
             const annualRevenue = monthlyRevenue.reduce((sum, revenue) => sum + revenue, 0);
             const totalVAT = monthlyNetVAT.reduce((sum, vat) => sum + vat, 0);
-            const reInvestment = monthlyBreakeven[11];
+            const freeCashFlow = monthlyBreakeven[11];
 
             let pricesAboveMin = [];
             priceData.forEach(dayPrices => {
@@ -363,12 +414,16 @@
                 paybackPeriod = ">12";
             }
 
-            // Calculate ROE and ROA
-            const totalEquity = totalInvestment; // Investment is considered equity
-            const totalAssets = totalInvestment * 1.2; // Assets are 20% more than investment
+            // Calculate ROE, ROA, ROI, IRR, and NPV
+            const totalEquity = totalInvestment;
+            const totalAssets = totalInvestment * 1.2;
             const roe = annualRevenue > 0 ? (annualRevenue / totalEquity) * 100 : 0;
             const roa = annualRevenue > 0 ? (annualRevenue / totalAssets) * 100 : 0;
+            const roi = calculateROI(annualRevenue, totalInvestment);
+            const irr = calculateIRR(monthlyRevenue, totalInvestment);
+            const npv = calculateNPV(monthlyRevenue, totalInvestment);
 
+            // Update display
             document.querySelector('.monthly-summary').innerHTML = '<h3>Monthly Income Summary</h3>';
             document.querySelector('.monthly-summary').appendChild(monthlyTable);
             
@@ -381,25 +436,24 @@
             document.getElementById('totalRevenue').textContent = annualRevenue.toFixed(2);
             
             const totalVATElement = document.getElementById('totalVAT');
-            if (totalVAT < 0) {
-                totalVATElement.style.color = 'red';
-            } else if (totalVAT === 0) {
-                totalVATElement.style.color = 'black';
-            } else {
-                totalVATElement.style.color = 'green';
-            }
+            totalVATElement.style.color = totalVAT < 0 ? 'red' : totalVAT > 0 ? 'green' : 'black';
             totalVATElement.textContent = `${totalVAT >= 0 ? '+' : '-'}${Math.abs(totalVAT).toFixed(2)}`;
             
-            document.getElementById('reInvestment').textContent = reInvestment <= 0 ? `+${Math.abs(reInvestment).toFixed(2)}` : '0.00';
+            document.getElementById('freeCashFlow').textContent = freeCashFlow <= 0 ? `+${Math.abs(freeCashFlow).toFixed(2)}` : '0.00';
             document.getElementById('paybackPeriod').textContent = paybackPeriod;
             document.getElementById('roe').textContent = roe.toFixed(2);
             document.getElementById('roa').textContent = roa.toFixed(2);
+            document.getElementById('roi').textContent = roi.toFixed(2);
+            document.getElementById('irr').textContent = irr.toFixed(2);
+            document.getElementById('npv').textContent = npv.toFixed(2);
         }
 
+        // Add event listeners
         document.querySelectorAll('input[type="number"]').forEach(input => {
             input.addEventListener('change', calculateResults);
         });
 
+        // Initial load
         loadPriceData();
         calculateResults();
     </script>
