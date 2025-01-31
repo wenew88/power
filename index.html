@@ -6,35 +6,126 @@
     <title>Power Plant Economic Analysis Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; }
-        label { display: inline-block; width: 200px; font-weight: bold; }
-        input { padding: 5px; width: 150px; margin-bottom: 10px; }
-        select { padding: 5px; width: 200px; margin-bottom: 10px; font-size: 14px; }
-        table { border-collapse: collapse; width: 100%; font-size: 12px; }
-        th, td { border: 1px solid #ddd; padding: 4px; text-align: right; }
-        .highlighted { background-color: #90EE90; }
-        .results { font-weight: bold; margin: 15px 0; }
-        .table-container { overflow-x: auto; max-height: 600px; overflow-y: auto; }
-        .monthly-summary { margin: 20px 0; }
-        .monthly-summary table { width: auto; margin: 10px 0; }
-        .monthly-summary td { padding: 5px 15px; }
-        .monthly-summary h3 { margin: 0 0 10px 0; }
-        #loading { display: none; color: #666; margin: 10px 0; font-style: italic; }
-        .financial-metric { margin-top: 10px; }
-        .metric-value { font-weight: bold; }
-        .metric-positive { color: green; }
-        .metric-negative { color: red; }
-        .section-title { color: #2c3e50; margin-bottom: 15px; }
-        .info-text { font-size: 12px; color: #666; margin-top: 5px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5; 
+        }
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        .section { 
+            margin-bottom: 30px; 
+            padding: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            background: white;
+        }
+        .section-title { 
+            color: #2c3e50; 
+            margin-bottom: 15px; 
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3498db;
+            font-weight: 600;
+        }
+        label { 
+            display: inline-block; 
+            width: 200px; 
+            font-weight: bold; 
+            margin-bottom: 5px;
+        }
+        input { 
+            padding: 8px; 
+            width: 150px; 
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        select { 
+            padding: 8px; 
+            width: 200px; 
+            margin-bottom: 10px; 
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            text-align: right; 
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .highlighted { 
+            background-color: #90EE90; 
+        }
+        .results { 
+            font-weight: bold; 
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+        .table-container { 
+            overflow-x: auto; 
+            max-height: 600px; 
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .monthly-summary { 
+            margin: 20px 0; 
+        }
+        .monthly-summary table { 
+            width: auto; 
+            margin: 10px 0; 
+        }
+        .monthly-summary td { 
+            padding: 8px 15px; 
+        }
+        .monthly-summary h3 { 
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        #loading { 
+            display: none; 
+            color: #666; 
+            margin: 10px 0; 
+            font-style: italic; 
+        }
+        .financial-metric { 
+            margin-top: 10px;
+            padding: 5px 0;
+        }
+        .metric-value { 
+            font-weight: bold;
+            padding: 0 5px;
+        }
+        .info-text { 
+            font-size: 12px; 
+            color: #666; 
+            margin-top: 5px; 
+        }
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        .neutral { color: #6c757d; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 class="section-title">Power Plant Economic Analysis Dashboard</h1>
         
-        <h2 class="section-title">Variables</h2>
+        <h2 class="section-title">Input Parameters</h2>
         <div class="section">
             <div>
                 <label>Number of Engines:</label>
@@ -70,7 +161,7 @@
             </div>
         </div>
 
-        <h2 class="section-title">Results</h2>
+        <h2 class="section-title">Key Project Metrics</h2>
         <div class="section">
             <div>
                 <label>Generation kWe:</label>
@@ -94,7 +185,7 @@
             </div>
         </div>
 
-        <h2 class="section-title">Monthly Spending</h2>
+        <h2 class="section-title">Monthly Operating Costs</h2>
         <div class="section">
             <div>
                 <label>Oil:</label>
@@ -117,7 +208,7 @@
                 <input type="number" id="otherCost" value="61500">
             </div>
             <div class="results">
-                <label>Total Monthly Spending:</label>
+                <label>Total Monthly Operating Costs:</label>
                 <span id="totalSpending">0</span>
             </div>
         </div>
@@ -133,9 +224,9 @@
                 <div>Hours above minimum price: <span id="hourCount">0</span></div>
                 <div>LCOE: <span id="lcoe">0</span></div>
                 <div>Total Income: <span id="totalIncome">0</span></div>
-                <div>Annual Revenue (after expenses): <span id="totalRevenue">0</span></div>
-                <div>Total VAT: <span id="totalVAT">0</span></div>
-                <div>Free Cash Flow: <span id="freeCashFlow">0</span></div>
+                <div>Annual Revenue (after expenses): <span id="totalRevenue" class="metric-value">0</span></div>
+                <div>Total VAT: <span id="totalVAT" class="metric-value">0</span></div>
+                <div>Free Cash Flow: <span id="freeCashFlow" class="metric-value">0</span></div>
                 <div>Payback Period: <span id="paybackPeriod">0</span> months</div>
                 <div class="financial-metric">ROE (Return on Equity): <span id="roe" class="metric-value">0</span>%</div>
                 <div class="financial-metric">ROA (Return on Assets): <span id="roa" class="metric-value">0</span>%</div>
@@ -433,13 +524,22 @@
             document.getElementById('hourCount').textContent = hoursCount;
             document.getElementById('lcoe').textContent = lcoe;
             document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
-            document.getElementById('totalRevenue').textContent = annualRevenue.toFixed(2);
             
+            // Annual Revenue styling
+            const totalRevenueElement = document.getElementById('totalRevenue');
+            totalRevenueElement.style.color = annualRevenue > 0 ? 'green' : annualRevenue < 0 ? 'red' : 'black';
+            totalRevenueElement.textContent = annualRevenue.toFixed(2);
+            
+            // Total VAT styling
             const totalVATElement = document.getElementById('totalVAT');
-            totalVATElement.style.color = totalVAT < 0 ? 'red' : totalVAT > 0 ? 'green' : 'black';
+            totalVATElement.style.color = totalVAT > 0 ? 'green' : totalVAT < 0 ? 'red' : 'black';
             totalVATElement.textContent = `${totalVAT >= 0 ? '+' : '-'}${Math.abs(totalVAT).toFixed(2)}`;
             
-            document.getElementById('freeCashFlow').textContent = freeCashFlow <= 0 ? `+${Math.abs(freeCashFlow).toFixed(2)}` : '0.00';
+            // Free Cash Flow styling
+            const freeCashFlowElement = document.getElementById('freeCashFlow');
+            freeCashFlowElement.style.color = freeCashFlow < 0 ? 'red' : 'green';
+            freeCashFlowElement.textContent = freeCashFlow <= 0 ? `+${Math.abs(freeCashFlow).toFixed(2)}` : '0.00';
+            
             document.getElementById('paybackPeriod').textContent = paybackPeriod;
             document.getElementById('roe').textContent = roe.toFixed(2);
             document.getElementById('roa').textContent = roa.toFixed(2);
